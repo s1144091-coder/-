@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>愛氏篩法大挑戰 (1-70)｜課堂即時互動遊戲</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- QRCode.js for generating scannable classroom QR codes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Tone.js for crisp classroom sound effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Canvas Confetti for celebrations -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts: Inter & Noto Sans TC -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;900&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans TC', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #f8fafc;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Shake animation for wrong selection */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-5px); }
+            40% { transform: translateX(5px); }
+            60% { transform: translateX(-4px); }
+            80% { transform: translateX(4px); }
+        }
+        .animate-shake {
+            animation: shake 0.38s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        /* Pop animation when a cross is placed */
+        @keyframes crossPop {
+            0% { transform: scale(0.5); opacity: 0; }
+            70% { transform: scale(1.12); opacity: 0.9; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-cross {
+            animation: crossPop 0.25s ease-out forwards;
+        }
+
+        /* Prime highlight glow after Level 5 */
+        @keyframes primePulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+            50% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+        }
+        .prime-glow {
+            animation: primePulse 2s infinite;
+        }
+
+        /* Number cell base styling for crisp legibility */
+        .num-cell {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            aspect-ratio: 1 / 1;
+            transition: transform 0.12s ease, background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .num-cell:active:not(:disabled) {
+            transform: scale(0.92);
+        }
+
+        /* Ensure the QR code canvas/img centers cleanly */
+        #modal-qrcode-container img, #modal-qrcode-container canvas {
+            margin: 0 auto;
+            border-radius: 0.75rem;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 flex flex-col">
+
+    <!-- ==================== GLOBAL TOAST NOTIFICATION ==================== -->
+    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center gap-2 w-11/12 max-w-md"></div>
+
+    <!-- ==================== VIEW 1: STUDENT START SCREEN ==================== -->
+    <section id="view-landing" class="flex-grow flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-white rounded-3xl shadow-xl border-2 border-indigo-100 p-6 sm:p-8 text-center">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-100 text-indigo-600 text-3xl mb-3 shadow-inner">
+                🔢
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                愛氏篩法大挑戰 (1–70)
+            </h1>
+            <p class="text-sm sm:text-base text-slate-500 mt-1.5 font-medium">
+                找出 1 至 70 內所有質數的五關密碼挑戰
+            </p>
+
+            <!-- Student Info & Start Form -->
+            <div class="mt-6 bg-slate-50 border border-slate-200 rounded-2xl p-5 text-left space-y-4">
+                <div>
+                    <label for="input-student-name" class="block text-xs font-black text-slate-600 mb-1.5">
+                        🧑‍🎓 請輸入你的姓名或班別學號：
+                    </label>
+                    <input id="input-student-name" type="text" maxlength="15" placeholder="例如：4A 陳小明"
+                        class="w-full px-4 py-3 text-base font-bold bg-white border-2 border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 transition">
+                </div>
+
+                <div class="bg-indigo-50/80 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-900 leading-relaxed font-medium">
+                    <div class="font-black mb-1">📋 闖關規則說明：</div>
+                    <ul class="list-disc list-inside space-y-0.5 text-indigo-800">
+                        <li>共有 <b>5 個關卡</b>，每關開始前需輸入老師公布的密碼。</li>
+                        <li>點選錯誤不會重來，系統會提示原因讓你繼續嘗試。</li>
+                        <li>完成全部五關後，剩下的數字就是 1–70 的所有質數！</li>
+                    </ul>
+                </div>
+
+                <button onclick="startNewChallenge()" class="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black py-3.5 px-4 rounded-xl shadow-lg text-base transition flex items-center justify-center gap-2">
+                    <span>進入第 1 關密碼鎖</span>
+                    <span>→</span>
+                </button>
+            </div>
+
+            <!-- Discreet Teacher Tools (QR Code & Password Sheet) -->
+            <div class="mt-5 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-center gap-3">
+                <button onclick="openQrModal()" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition">
+                    📱 展示課堂二維碼
+                </button>
+                <button onclick="openPasswordSheetModal()" class="text-xs font-bold text-slate-400 hover:text-indigo-600 transition underline">
+                    🔑 教師檢視五關解鎖密碼表
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== VIEW 2: STUDENT GAMEPLAY ==================== -->
+    <section id="view-student" class="hidden flex-grow flex flex-col">
+        <!-- Student Header -->
+        <header class="bg-white border-b-2 border-slate-200 px-3 sm:px-4 py-2.5 shadow-sm sticky top-0 z-30">
+            <div class="max-w-4xl mx-auto flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl sm:text-2xl">🧑‍🎓</span>
+                    <div>
+                        <div class="flex items-center gap-1.5">
+                            <span id="student-name-display" class="font-black text-slate-800 text-sm sm:text-base">學生</span>
+                            <span id="header-stage-badge" class="text-[11px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
+                                第 1 / 5 關
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-1 mt-1" id="student-level-dots">
+                            <!-- 5 level progress dots -->
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-xl text-xs font-black text-amber-800">
+                        已剔除: <span id="student-crossed-count">0</span>
+                    </div>
+                    <button onclick="toggleSound()" class="sound-toggle-btn bg-slate-100 hover:bg-slate-200 p-2 rounded-xl text-sm transition" title="開關音效">
+                        🔊
+                    </button>
+                    <button onclick="confirmRestartGame()" class="bg-slate-100 hover:bg-rose-100 hover:text-rose-700 text-slate-600 font-bold text-xs px-2.5 py-2 rounded-xl transition">
+                        🔄 重玩
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Student Main Area -->
+        <main class="max-w-4xl w-full mx-auto p-3 sm:p-4 flex-grow flex flex-col gap-3">
+
+            <!-- PASSWORD GATE CARD (Shown before starting EVERY level 1..5) -->
+            <div id="password-gate-card" class="bg-white rounded-3xl shadow-lg border-2 border-amber-300 p-5 sm:p-6 text-center">
+                <div id="gate-completed-notice" class="hidden mb-3 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs sm:text-sm font-black">
+                    🎉 太棒了！你已完成上一關卡！
+                </div>
+                <div class="flex flex-col items-center">
+                    <div class="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 text-3xl flex items-center justify-center mb-2 shadow-inner">
+                        🔒
+                    </div>
+                    <h2 id="gate-title" class="text-xl sm:text-2xl font-black text-slate-900">
+                        準備開始第 1 關
+                    </h2>
+                    <p id="gate-subtitle" class="text-xs sm:text-sm text-slate-500 font-bold mt-1">
+                        請向老師查詢並輸入<span class="text-indigo-600">第 1 關密碼</span>以解鎖任務
+                    </p>
+                </div>
+
+                <div class="mt-4 max-w-xs mx-auto flex flex-col gap-2.5">
+                    <input id="level-password-input" type="text" inputmode="numeric" maxlength="10" placeholder="輸入本關密碼"
+                        class="w-full px-4 py-3 text-center text-xl font-black tracking-widest uppercase bg-slate-50 border-2 border-slate-300 rounded-2xl focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                    <p id="password-error-text" class="hidden text-xs font-black text-rose-600">
+                        ❌ 密碼不正確，請再檢查一次！
+                    </p>
+                    <button onclick="submitLevelPassword()" class="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black py-3 px-5 rounded-2xl shadow-md text-base transition flex items-center justify-center gap-2">
+                        <span>🔓</span>
+                        <span id="gate-submit-label">解鎖並開始第 1 關</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ACTIVE MISSION BANNER (Shown once the current level is unlocked) -->
+            <div id="student-mission-banner" class="hidden bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-2xl p-3.5 sm:p-4 shadow-md flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span id="student-level-badge" class="bg-white/20 backdrop-blur px-2.5 py-0.5 rounded-lg text-xs font-black">
+                            第 1 關 / 共 5 關
+                        </span>
+                        <span id="student-remaining-badge" class="bg-amber-400 text-indigo-950 px-2.5 py-0.5 rounded-lg text-xs font-black">
+                            本關剩餘：1 個
+                        </span>
+                    </div>
+                    <h2 id="student-mission-text" class="text-base sm:text-xl font-black mt-1">
+                        剔除「1」
+                    </h2>
+                </div>
+                <div class="text-xs bg-white/15 px-3 py-1.5 rounded-xl font-bold">
+                    點擊數字即可畫上叉號 ❌
+                </div>
+            </div>
+
+            <!-- Inline Feedback Bar (Wrong Selection Hint) -->
+            <div id="student-feedback-bar" class="hidden rounded-2xl px-4 py-2.5 text-sm font-bold flex items-center gap-2 border-2 transition-all">
+                <span id="feedback-icon" class="text-lg">❌</span>
+                <span id="feedback-msg">提示訊息</span>
+            </div>
+
+            <!-- All 5 Levels Completed Summary Banner -->
+            <div id="student-all-done-banner" class="hidden bg-gradient-to-br from-emerald-50 to-amber-50 border-2 border-emerald-400 rounded-2xl p-4 sm:p-5 text-center shadow-md">
+                <div class="text-2xl sm:text-3xl font-black text-emerald-900 mb-1">
+                    🏆 恭喜 <span id="winner-name-display">你</span> 完成全部五關挑戰！
+                </div>
+                <p class="text-xs sm:text-sm font-bold text-slate-700 mt-1">
+                    表格中剩下沒有被畫叉的 <b class="text-emerald-600 text-base">19 個數字</b>，全部都是 1 至 70 內的<b class="text-emerald-700">質數</b>！
+                </p>
+                <div class="mt-3 flex flex-wrap justify-center gap-1.5" id="prime-summary-chips"></div>
+                <button onclick="confirmRestartGame()" class="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow transition">
+                    🔄 重新挑戰一次
+                </button>
+            </div>
+
+            <!-- 1 to 70 Interactive Number Grid (10 columns x 7 rows) -->
+            <div class="bg-white rounded-3xl shadow-md border-2 border-slate-200 p-2 sm:p-4">
+                <div id="student-grid" class="grid grid-cols-10 gap-1 sm:gap-2">
+                    <!-- 70 buttons generated via JS -->
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="flex flex-wrap items-center justify-center gap-3 text-xs font-bold text-slate-500 pb-2">
+                <span class="flex items-center gap-1">
+                    <span class="inline-block w-3.5 h-3.5 rounded bg-white border-2 border-slate-300"></span> 未剔除數字
+                </span>
+                <span class="flex items-center gap-1">
+                    <span class="inline-block w-3.5 h-3.5 rounded bg-rose-50 border border-rose-300 text-rose-500 text-[10px] leading-none text-center font-black">✕</span> 已剔除（保留顯示數字）
+                </span>
+                <span class="flex items-center gap-1">
+                    <span class="inline-block w-3.5 h-3.5 rounded bg-emerald-100 border-2 border-emerald-500"></span> 質數（完成後標示）
+                </span>
+            </div>
+        </main>
+    </section>
+
+    <!-- ==================== CLASSROOM QR CODE MODAL ==================== -->
+    <div id="qr-code-modal" class="hidden fixed inset-0 bg-slate-900/75 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="closeQrModal()">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 text-center shadow-2xl border-2 border-indigo-200" onclick="event.stopPropagation()">
+            <div class="text-3xl mb-1">📱</div>
+            <h3 class="text-xl font-black text-slate-900">掃描二維碼進入課堂遊戲</h3>
+            <p class="text-xs text-slate-500 font-bold mt-1">請學生用平板或手機相機掃描下方二維碼</p>
+
+            <!-- Local file warning if not opened via https:// -->
+            <div id="qr-local-warning" class="hidden mt-3 bg-amber-50 border border-amber-300 rounded-xl p-2.5 text-left text-xs text-amber-900 font-medium">
+                ⚠️ 目前偵測到你正在開啟本機檔案，手機無法掃描本機路徑。請在下方貼上你的 <b>GitHub Pages / Netlify 公開網址</b>以產生可掃描的二維碼：
+            </div>
+
+            <!-- QR Code Canvas Container -->
+            <div class="mt-4 bg-white p-4 rounded-2xl border-2 border-indigo-100 shadow-inner inline-block">
+                <div id="modal-qrcode-container" class="flex items-center justify-center min-h-[220px] min-w-[220px]"></div>
+            </div>
+
+            <!-- Custom / Current URL Input & Copy -->
+            <div class="mt-4 text-left space-y-2">
+                <label for="qr-url-input" class="block text-[11px] font-black text-slate-500">
+                    🔗 網站連結（可手動修改並即時更新二維碼）：
+                </label>
+                <div class="flex gap-1.5">
+                    <input id="qr-url-input" type="url" placeholder="https://你的用戶名.github.io/sieve-game/"
+                        oninput="updateQrCodeFromInput()"
+                        class="flex-1 px-3 py-2 text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-500">
+                    <button onclick="copyGameUrl()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs px-3 py-2 rounded-xl transition shrink-0">
+                        複製網址
+                    </button>
+                </div>
+            </div>
+
+            <button onclick="closeQrModal()" class="mt-5 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl transition">
+                關閉二維碼視窗
+            </button>
+        </div>
+    </div>
+
+    <!-- ==================== TEACHER PASSWORD REFERENCE MODAL ==================== -->
+    <div id="password-sheet-modal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="closePasswordSheetModal()">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 text-center shadow-2xl border-2 border-indigo-200" onclick="event.stopPropagation()">
+            <div class="text-3xl mb-1">🔑</div>
+            <h3 class="text-xl font-black text-slate-900">五關解鎖密碼表（教師參考）</h3>
+            <p class="text-xs text-slate-500 font-bold mt-1">請在每關開始前向學生公布對應密碼</p>
+            <div id="password-sheet-list" class="mt-4 space-y-2 text-left">
+                <!-- Populated by JS -->
+            </div>
+            <button onclick="closePasswordSheetModal()" class="mt-5 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl transition">
+                關閉視窗
+            </button>
+        </div>
+    </div>
+
+    <!-- ==================== CUSTOM CONFIRMATION MODAL (NO alert/confirm) ==================== -->
+    <div id="confirm-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl border-2 border-slate-200">
+            <div class="text-4xl mb-2">⚠️</div>
+            <h3 id="confirm-title" class="text-lg font-black text-slate-900">確認操作</h3>
+            <p id="confirm-desc" class="text-sm text-slate-500 mt-1 font-medium">確定要執行此操作嗎？</p>
+            <div class="flex gap-2 mt-5">
+                <button onclick="closeConfirmModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition">
+                    取消
+                </button>
+                <button id="confirm-ok-btn" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-black py-2.5 rounded-xl transition">
+                    確定
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MAIN APPLICATION SCRIPT ==================== -->
+    <script>
+        /* ----------------------------------------------------------------
+         * 1. GAME LEVEL & PASSWORD DEFINITIONS (1 to 70 Sieve of Eratosthenes)
+         * ---------------------------------------------------------------- */
+        const MAX_NUM = 70;
+        const PRIMES_70 = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67];
+
+        const LEVELS = [
+            null, // index 0 unused
+            {
+                id: 1,
+                password: "4829",
+                title: "第 1 關：剔除「1」",
+                shortTitle: "剔除「1」",
+                crossColor: "rgba(100, 116, 139, 0.65)", // Slate translucent cross
+                isTarget: (n) => n === 1,
+                getErrorHint: (n) => `選擇錯誤！「${n}」不是 1，第一關只需要剔除數字「1」喔！`
+            },
+            {
+                id: 2,
+                password: "7153",
+                title: "第 2 關：剔除「2」以外的所有「2」的倍數",
+                shortTitle: "剔除 2 以外的 2 的倍數",
+                crossColor: "rgba(239, 68, 68, 0.58)", // Red translucent cross
+                isTarget: (n) => n > 2 && n % 2 === 0,
+                getErrorHint: (n) => n === 2
+                    ? "選擇錯誤！「2」是質數，要保留它，請剔除「2」以外的 2 的倍數！"
+                    : `選擇錯誤！「${n}」不是 2 的倍數，再檢查看看喔！`
+            },
+            {
+                id: 3,
+                password: "2964",
+                title: "第 3 關：剔除「3」以外的所有「3」的倍數",
+                shortTitle: "剔除 3 以外的 3 的倍數",
+                crossColor: "rgba(249, 115, 22, 0.62)", // Orange translucent cross
+                isTarget: (n) => n > 3 && n % 3 === 0,
+                getErrorHint: (n) => n === 3
+                    ? "選擇錯誤！「3」是質數，要保留它，請剔除「3」以外的 3 的倍數！"
+                    : `選擇錯誤！「${n}」不是 3 的倍數，試著把數字除以 3 檢查！`
+            },
+            {
+                id: 4,
+                password: "8347",
+                title: "第 4 關：剔除「5」以外的所有「5」的倍數",
+                shortTitle: "剔除 5 以外的 5 的倍數",
+                crossColor: "rgba(168, 85, 247, 0.60)", // Purple translucent cross
+                isTarget: (n) => n > 5 && n % 5 === 0,
+                getErrorHint: (n) => n === 5
+                    ? "選擇錯誤！「5」是質數，要保留它，請剔除「5」以外的 5 的倍數！"
+                    : `選擇錯誤！「${n}」不是 5 的倍數（提示：個位是 0 或 5 的數才是 5 的倍數）！`
+            },
+            {
+                id: 5,
+                password: "6518",
+                title: "第 5 關：剔除「7」以外的所有「7」的倍數",
+                shortTitle: "剔除 7 以外的 7 的倍數",
+                crossColor: "rgba(14, 165, 233, 0.62)", // Sky blue translucent cross
+                isTarget: (n) => n > 7 && n % 7 === 0,
+                getErrorHint: (n) => n === 7
+                    ? "選擇錯誤！「7」是質數，要保留它，請剔除「7」以外的 7 的倍數！"
+                    : `選擇錯誤！「${n}」不是 7 的倍數，想想 7 的乘法口訣喔！`
+            }
+        ];
+
+        /* ----------------------------------------------------------------
+         * 2. STUDENT GAMEPLAY STATE
+         * ---------------------------------------------------------------- */
+        let studentName = '小小數學家';
+        let currentLevel = 1;          // Current level (1..5)
+        let isLevelUnlocked = false;   // Whether student has entered the password for currentLevel
+        let completedLevels = 0;       // Highest completed level (0..5)
+        let crossedMap = {};           // { [num]: levelIdThatCrossedIt }
+        let isAllDone = false;
+
+        // Sound State (Tone.js)
+        let soundEnabled = true;
+        let synth = null;
+
+        /* ----------------------------------------------------------------
+         * 3. SOUND EFFECTS (Tone.js)
+         * ---------------------------------------------------------------- */
+        function playSfx(type) {
+            if (!soundEnabled || typeof Tone === 'undefined') return;
+            try {
+                if (Tone.context.state !== 'running') {
+                    Tone.start();
+                }
+                if (!synth) {
+                    synth = new Tone.PolySynth(Tone.Synth, {
+                        oscillator: { type: 'triangle' },
+                        envelope: { attack: 0.01, decay: 0.12, sustain: 0.05, release: 0.2 }
+                    }).toDestination();
+                }
+                const now = Tone.now();
+                if (type === 'correct') {
+                    synth.triggerAttackRelease('C5', '16n', now);
+                    synth.triggerAttackRelease('E5', '16n', now + 0.06);
+                } else if (type === 'wrong') {
+                    synth.triggerAttackRelease('E3', '16n', now);
+                    synth.triggerAttackRelease('C3', '16n', now + 0.08);
+                } else if (type === 'levelup') {
+                    synth.triggerAttackRelease('C5', '16n', now);
+                    synth.triggerAttackRelease('E5', '16n', now + 0.09);
+                    synth.triggerAttackRelease('G5', '8n', now + 0.18);
+                } else if (type === 'win') {
+                    synth.triggerAttackRelease(['C5', 'E5', 'G5'], '8n', now);
+                    synth.triggerAttackRelease(['E5', 'G5', 'C6'], '4n', now + 0.18);
+                }
+            } catch (err) {
+                // Ignore audio errors on restricted devices
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.querySelectorAll('.sound-toggle-btn').forEach(btn => {
+                btn.innerText = soundEnabled ? '🔊' : '🔇';
+            });
+            showToast(soundEnabled ? '已開啟遊戲音效 🔊' : '已靜音 🔇', 'info');
+        }
+
+        /* ----------------------------------------------------------------
+         * 4. TOAST & MODAL UTILITIES (NO alert/confirm)
+         * ---------------------------------------------------------------- */
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            const styles = {
+                info: 'bg-slate-800 text-white border-slate-700',
+                success: 'bg-emerald-600 text-white border-emerald-500',
+                warning: 'bg-amber-500 text-white border-amber-400',
+                error: 'bg-rose-600 text-white border-rose-500'
+            };
+            toast.className = `px-4 py-2.5 rounded-2xl shadow-lg border font-bold text-xs sm:text-sm transition-all duration-300 transform translate-y-0 opacity-100 ${styles[type] || styles.info}`;
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        let pendingConfirmAction = null;
+        function openConfirmModal(title, desc, onConfirm) {
+            document.getElementById('confirm-title').innerText = title;
+            document.getElementById('confirm-desc').innerText = desc;
+            pendingConfirmAction = onConfirm;
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            pendingConfirmAction = null;
+        }
+
+        document.getElementById('confirm-ok-btn').addEventListener('click', () => {
+            const fn = pendingConfirmAction;
+            closeConfirmModal();
+            if (typeof fn === 'function') fn();
+        });
+
+        /* ----------------------------------------------------------------
+         * 4B. CLASSROOM QR CODE & PASSWORD SHEET MODALS
+         * ---------------------------------------------------------------- */
+        function renderQrCode(urlText) {
+            const container = document.getElementById('modal-qrcode-container');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const cleanUrl = (urlText || '').trim();
+            if (!cleanUrl) {
+                container.innerHTML = '<div class="text-xs font-bold text-slate-400 px-4">請在下方輸入有效的 https:// 網址</div>';
+                return;
+            }
+
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(container, {
+                    text: cleanUrl,
+                    width: 220,
+                    height: 220,
+                    colorDark: '#0f172a',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            } else {
+                container.innerHTML = '<div class="text-xs font-bold text-rose-500">二維碼元件載入失敗，請檢查網絡連線</div>';
+            }
+        }
+
+        function openQrModal() {
+            const currentUrl = window.location.href;
+            const isPublicHttp = /^https?:\/\//i.test(currentUrl);
+            const warningEl = document.getElementById('qr-local-warning');
+            const inputEl = document.getElementById('qr-url-input');
+
+            if (isPublicHttp) {
+                warningEl.classList.add('hidden');
+                if (!inputEl.value) inputEl.value = currentUrl;
+                renderQrCode(inputEl.value);
+            } else {
+                warningEl.classList.remove('hidden');
+                if (inputEl.value) {
+                    renderQrCode(inputEl.value);
+                } else {
+                    renderQrCode('');
+                }
+            }
+
+            document.getElementById('qr-code-modal').classList.remove('hidden');
+        }
+
+        function updateQrCodeFromInput() {
+            const val = (document.getElementById('qr-url-input').value || '').trim();
+            const warningEl = document.getElementById('qr-local-warning');
+            if (/^https?:\/\//i.test(val)) {
+                warningEl.classList.add('hidden');
+            }
+            renderQrCode(val);
+        }
+
+        function copyGameUrl() {
+            const val = (document.getElementById('qr-url-input').value || '').trim();
+            if (!val) {
+                showToast('目前沒有可複製的網址！', 'warning');
+                return;
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(val).then(() => {
+                    showToast('已複製網站連結 📋', 'success');
+                }).catch(() => {
+                    showToast('請手動全選網址框並複製', 'info');
+                });
+            } else {
+                const inputEl = document.getElementById('qr-url-input');
+                inputEl.select();
+                document.execCommand('copy');
+                showToast('已複製網站連結 📋', 'success');
+            }
+        }
+
+        function closeQrModal() {
+            document.getElementById('qr-code-modal').classList.add('hidden');
+        }
+
+        function openPasswordSheetModal() {
+            const listEl = document.getElementById('password-sheet-list');
+            listEl.innerHTML = [1, 2, 3, 4, 5].map(i => {
+                const lvl = LEVELS[i];
+                return `
+                    <div class="flex items-center justify-between bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl">
+                        <div class="text-xs font-bold text-slate-700">
+                            <span class="text-indigo-700 font-black">第 ${i} 關</span>：${lvl.shortTitle}
+                        </div>
+                        <span class="font-mono font-black text-base text-indigo-700 bg-indigo-100 px-3 py-0.5 rounded-lg tracking-wider">
+                            ${lvl.password}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+            document.getElementById('password-sheet-modal').classList.remove('hidden');
+        }
+
+        function closePasswordSheetModal() {
+            document.getElementById('password-sheet-modal').classList.add('hidden');
+        }
+
+        /* ----------------------------------------------------------------
+         * 5. GAME FLOW & LEVEL PASSWORD GATE LOGIC
+         * ---------------------------------------------------------------- */
+        function showView(viewId) {
+            ['view-landing', 'view-student'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('hidden', id !== viewId);
+            });
+        }
+
+        function startNewChallenge() {
+            const rawName = (document.getElementById('input-student-name').value || '').trim();
+            if (!rawName) {
+                showToast('請先輸入你的姓名或班別學號！', 'warning');
+                document.getElementById('input-student-name').focus();
+                return;
+            }
+            studentName = rawName;
+            resetGameState();
+            document.getElementById('student-name-display').innerText = studentName;
+            document.getElementById('winner-name-display').innerText = studentName;
+            showView('view-student');
+            renderGameUI();
+            focusPasswordInput();
+        }
+
+        function resetGameState() {
+            currentLevel = 1;
+            isLevelUnlocked = false;
+            completedLevels = 0;
+            crossedMap = {};
+            isAllDone = false;
+            hideFeedbackBar();
+            const pwErr = document.getElementById('password-error-text');
+            if (pwErr) pwErr.classList.add('hidden');
+            const pwInput = document.getElementById('level-password-input');
+            if (pwInput) pwInput.value = '';
+        }
+
+        function confirmRestartGame() {
+            openConfirmModal(
+                '重新開始遊戲？',
+                '確定要清除目前的剔除紀錄，從第 1 關重新開始嗎？',
+                () => {
+                    resetGameState();
+                    renderGameUI();
+                    focusPasswordInput();
+                    showToast('已重置為第 1 關 🔄', 'info');
+                }
+            );
+        }
+
+        function focusPasswordInput() {
+            setTimeout(() => {
+                const input = document.getElementById('level-password-input');
+                if (input) input.focus();
+            }, 120);
+        }
+
+        function submitLevelPassword() {
+            if (isLevelUnlocked || isAllDone) return;
+
+            const inputEl = document.getElementById('level-password-input');
+            const errorEl = document.getElementById('password-error-text');
+            const entered = (inputEl.value || '').trim().toUpperCase();
+            const expected = LEVELS[currentLevel].password.toUpperCase();
+
+            if (entered === expected) {
+                isLevelUnlocked = true;
+                inputEl.value = '';
+                errorEl.classList.add('hidden');
+                playSfx('levelup');
+                showToast(`已成功解鎖 ${LEVELS[currentLevel].title}！`, 'success');
+                renderGameUI();
+            } else {
+                playSfx('wrong');
+                errorEl.innerText = `❌ 密碼錯誤！請輸入老師公布的「第 ${currentLevel} 關」密碼。`;
+                errorEl.classList.remove('hidden');
+                inputEl.classList.remove('animate-shake', 'border-rose-500');
+                void inputEl.offsetWidth;
+                inputEl.classList.add('animate-shake', 'border-rose-500');
+                inputEl.select();
+            }
+        }
+
+        // Allow pressing Enter inside name input or level password input
+        document.getElementById('input-student-name').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') startNewChallenge();
+        });
+        document.getElementById('level-password-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitLevelPassword();
+        });
+
+        /* ----------------------------------------------------------------
+         * 6. GRID INTERACTION & NUMBER ELIMINATION LOGIC
+         * ---------------------------------------------------------------- */
+        function getRemainingTargetsForLevel(lvlId) {
+            const lvl = LEVELS[lvlId];
+            if (!lvl) return [];
+            const remaining = [];
+            for (let n = 1; n <= MAX_NUM; n++) {
+                if (lvl.isTarget(n) && !crossedMap[n]) {
+                    remaining.push(n);
+                }
+            }
+            return remaining;
+        }
+
+        function handleStudentCellClick(n, btnEl) {
+            // Do nothing if current level is still locked behind password or game finished
+            if (!isLevelUnlocked || isAllDone) return;
+
+            // Already crossed out in this or earlier level
+            if (crossedMap[n]) return;
+
+            const lvl = LEVELS[currentLevel];
+            if (lvl.isTarget(n)) {
+                // Correct selection: place translucent cross and keep number visible
+                crossedMap[n] = currentLevel;
+                playSfx('correct');
+                hideFeedbackBar();
+
+                // Check if current level is now complete
+                const remaining = getRemainingTargetsForLevel(currentLevel);
+                if (remaining.length === 0) {
+                    completedLevels = currentLevel;
+
+                    if (currentLevel === 5) {
+                        // All 5 levels completed!
+                        isAllDone = true;
+                        playSfx('win');
+                        if (typeof confetti === 'function') {
+                            confetti({ particleCount: 110, spread: 75, origin: { y: 0.6 } });
+                        }
+                    } else {
+                        // Advance to next level and lock it behind password gate
+                        currentLevel += 1;
+                        isLevelUnlocked = false;
+                        playSfx('levelup');
+                        focusPasswordInput();
+                    }
+                }
+
+                renderGameUI();
+            } else {
+                // Wrong selection: do not cross, do not reset progress, shake & remind
+                playSfx('wrong');
+                if (btnEl) {
+                    btnEl.classList.remove('animate-shake', 'border-rose-500', 'bg-rose-50');
+                    void btnEl.offsetWidth;
+                    btnEl.classList.add('animate-shake', 'border-rose-500', 'bg-rose-50');
+                    setTimeout(() => {
+                        btnEl.classList.remove('border-rose-500', 'bg-rose-50');
+                    }, 550);
+                }
+                showFeedbackBar(lvl.getErrorHint(n), 'error');
+            }
+        }
+
+        function showFeedbackBar(msg, type = 'error') {
+            const bar = document.getElementById('student-feedback-bar');
+            const icon = document.getElementById('feedback-icon');
+            const text = document.getElementById('feedback-msg');
+            bar.classList.remove('hidden', 'bg-rose-50', 'border-rose-300', 'text-rose-800', 'bg-indigo-50', 'border-indigo-300', 'text-indigo-800');
+            if (type === 'error') {
+                bar.classList.add('bg-rose-50', 'border-rose-300', 'text-rose-800');
+                icon.innerText = '❌';
+            } else {
+                bar.classList.add('bg-indigo-50', 'border-indigo-300', 'text-indigo-800');
+                icon.innerText = '💡';
+            }
+            text.innerText = msg;
+        }
+
+        function hideFeedbackBar() {
+            const bar = document.getElementById('student-feedback-bar');
+            if (bar) bar.classList.add('hidden');
+        }
+
+        function createCrossSvg(strokeColor) {
+            return `
+                <svg class="absolute inset-0 w-full h-full p-1 pointer-events-none animate-cross z-20" viewBox="0 0 100 100" aria-hidden="true">
+                    <line x1="16" y1="16" x2="84" y2="84" stroke="${strokeColor}" stroke-width="11" stroke-linecap="round" />
+                    <line x1="84" y1="16" x2="16" y2="84" stroke="${strokeColor}" stroke-width="11" stroke-linecap="round" />
+                </svg>
+            `;
+        }
+
+        /* ----------------------------------------------------------------
+         * 7. RENDER UI (PASSWORD GATE, MISSION BANNER & 1-70 GRID)
+         * ---------------------------------------------------------------- */
+        function renderGameUI() {
+            const gateCard = document.getElementById('password-gate-card');
+            const gateCompletedNotice = document.getElementById('gate-completed-notice');
+            const missionBanner = document.getElementById('student-mission-banner');
+            const doneBanner = document.getElementById('student-all-done-banner');
+
+            // Update header stats & 5 progress dots
+            document.getElementById('student-crossed-count').innerText = Object.keys(crossedMap).length;
+            document.getElementById('header-stage-badge').innerText = isAllDone ? '全部完成 🏆' : `第 ${currentLevel} / 5 關`;
+
+            const dotsEl = document.getElementById('student-level-dots');
+            dotsEl.innerHTML = [1, 2, 3, 4, 5].map(i => {
+                const isDone = completedLevels >= i;
+                const isCurr = !isAllDone && currentLevel === i && !isDone;
+                return `<span class="w-4 h-1.5 rounded-full ${isDone ? 'bg-emerald-500' : isCurr ? 'bg-indigo-600' : 'bg-slate-200'}"></span>`;
+            }).join('');
+
+            // Banner state switching
+            if (isAllDone) {
+                gateCard.classList.add('hidden');
+                missionBanner.classList.add('hidden');
+                doneBanner.classList.remove('hidden');
+                document.getElementById('prime-summary-chips').innerHTML = PRIMES_70.map(p =>
+                    `<span class="px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-xs font-black shadow-xs">${p}</span>`
+                ).join('');
+            } else if (!isLevelUnlocked) {
+                // Show Password Gate before starting currentLevel
+                doneBanner.classList.add('hidden');
+                missionBanner.classList.add('hidden');
+                gateCard.classList.remove('hidden');
+
+                if (completedLevels > 0) {
+                    gateCompletedNotice.classList.remove('hidden');
+                    gateCompletedNotice.innerText = `🎉 太棒了！你已完成第 ${completedLevels} 關！`;
+                } else {
+                    gateCompletedNotice.classList.add('hidden');
+                }
+
+                document.getElementById('gate-title').innerText = `準備開始第 ${currentLevel} 關`;
+                document.getElementById('gate-subtitle').innerHTML = `請輸入老師公布的<span class="text-indigo-600">第 ${currentLevel} 關密碼</span>以解鎖任務`;
+                document.getElementById('gate-submit-label').innerText = `解鎖並開始第 ${currentLevel} 關`;
+            } else {
+                // Active mission state
+                doneBanner.classList.add('hidden');
+                gateCard.classList.add('hidden');
+                missionBanner.classList.remove('hidden');
+
+                const lvl = LEVELS[currentLevel];
+                const remaining = getRemainingTargetsForLevel(currentLevel);
+                document.getElementById('student-level-badge').innerText = `第 ${currentLevel} 關 / 共 5 關`;
+                document.getElementById('student-remaining-badge').innerText = `本關剩餘：${remaining.length} 個`;
+                document.getElementById('student-mission-text').innerText = lvl.title;
+            }
+
+            // Render 1-70 interactive grid
+            const grid = document.getElementById('student-grid');
+            grid.innerHTML = '';
+            const isGridLocked = !isLevelUnlocked || isAllDone;
+
+            for (let n = 1; n <= MAX_NUM; n++) {
+                const crossedLevelId = crossedMap[n];
+                const isPrimeFinal = isAllDone && !crossedLevelId;
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.disabled = Boolean(crossedLevelId) || isGridLocked;
+
+                let cellStyle = 'bg-white border-2 border-slate-200 text-slate-800 hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer shadow-2xs';
+                if (isPrimeFinal) {
+                    cellStyle = 'bg-emerald-100 border-2 border-emerald-500 text-emerald-900 prime-glow cursor-default';
+                } else if (crossedLevelId) {
+                    // Translucent cross over clearly visible number
+                    cellStyle = 'bg-slate-50 border border-slate-200 text-slate-600 cursor-default';
+                } else if (!isLevelUnlocked) {
+                    cellStyle = 'bg-slate-50 border-2 border-slate-200 text-slate-400 cursor-not-allowed';
+                }
+
+                btn.className = `num-cell rounded-xl font-black text-sm sm:text-lg md:text-xl ${cellStyle}`;
+                btn.innerHTML = `<span class="relative z-10">${n}</span>`;
+
+                if (crossedLevelId) {
+                    btn.innerHTML += createCrossSvg(LEVELS[crossedLevelId].crossColor);
+                }
+
+                btn.addEventListener('click', () => handleStudentCellClick(n, btn));
+                grid.appendChild(btn);
+            }
+        }
+    </script>
+</body>
+</html>
